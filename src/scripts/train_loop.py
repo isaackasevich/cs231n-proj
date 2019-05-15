@@ -6,22 +6,23 @@ TODO:
     -Define loader_train function for our imagenet data
 '''
 
-from scripts import *
+from gan import *
 
 import torch
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 # from torchvision.datasets import ImageNet
-from torchvision.datasets import CIFAR10
-from pyblur.pyblur.PsfBlur import PsfBlur_random
 
 from torchvision.utils import save_image
 from torch.autograd import Variable
 
+import sys
+sys.path.append('../dataprocessing')
+from dataloader import BlurDataset
+
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
 
 # parser = argparse.ArgumentParser()
 # parser.add_argument("--n_epochs", type=int, default=5, help="number of epochs of training")
@@ -83,11 +84,14 @@ TODO:
 '''
     
 path='~/cs231n-proj/data/cifar'
-data = CIFAR10(path, train=True, download=True, 
-               transform=transforms.Compose([
-                   transforms.Lambda(lambda img: PsfBlur_random(img)),
-                   transforms.ToTensor()]))
-dataloader = DataLoader(data, batch_size=5, shuffle=True)
+
+data = BlurDataset.from_single_dataset(path)
+dataloader = data.train.loader()
+# data = CIFAR10(path, train=True, download=True, 
+#                transform=transforms.Compose([
+#                    transforms.Lambda(lambda img: PsfBlur_random(img)),
+#                    transforms.ToTensor()]))
+# dataloader = DataLoader(data, batch_size=5, shuffle=True)
 
 '''
 Train
@@ -138,10 +142,8 @@ for epoch in range(num_epochs):
         d_loss.backward()
         optimizer_D.step()
 
-         print(
-        "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-        % (epoch, opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item())
-        )
+        print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+        % (epoch, opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item()))
 
         batches_done = epoch * len(dataloader) + i
         if batches_done % opt.sample_interval == 0:

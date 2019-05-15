@@ -30,7 +30,7 @@ class Generator(nn.Module):
             return layers
 
         self.model = nn.Sequential(
-            *block(opt.latent_dim, 128, normalize=False),
+            *block(100, 128, normalize=False),
             *block(128, 256),
             *block(256, 512),
             *block(512, 1024),

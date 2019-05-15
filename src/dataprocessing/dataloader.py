@@ -7,18 +7,20 @@ import torchvision.transforms as transforms
 from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy
 from torch.utils.data import Dataset, DataLoader
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import CIFAR10, SBU
+from pyblur.pyblur.LinearMotionBlur import LinearMotionBlur, randomAngle
+from pyblur.pyblur.PsfBlur import PsfBlur
 from PIL import Image
+import random
+from IPython.display import display
 
 class DataEntry(Dataset):
     def __init__(self, dataset, tsfms = None):
         ## todo: figure out how to get data in the right format
         self.dataset = dataset
         self.transforms = tsfms
-     
-    def show(idx):
-        pass 
     
     def loader(self, batch_size=50, shuffle=True):
         """
@@ -36,6 +38,7 @@ class DataEntry(Dataset):
     def __len__(self):
         return len(self.data)
     
+    
 class CustomCIFAR(CIFAR10):
     def __getitem__(self, index):
         img = self.data[index]
@@ -50,11 +53,24 @@ class CustomCIFAR(CIFAR10):
         
         return img, tgt
         
+class CustomSBU(SBU):
+    def __getitem__(self, index):
+        filename = os.path.join(self.root, 'dataset', self.photos[index])
+        img = Image.open(filename).convert('RGB')
+        target = img.copy()
+        if self.transform is not None:
+            img = self.transform(img)
+            
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+        
     
 class BlurDataset(object):
-    def __init__(self):
-        self.train = None
-        self.test = None
+    def __init__(self, train, test):
+        self.train = train
+        self.test = test
         
     @staticmethod
     def gopro(path_to_root):
@@ -68,24 +84,20 @@ class BlurDataset(object):
         
     @staticmethod
     def from_single_dataset(path, dataset_name = 'CIFAR'):
-        dataset = BlurDataset()
         if dataset_name == "CIFAR":
             train_data = CustomCIFAR(path+'/train', train=True, 
                                  download = True,
-                                 transform = None)
+                                 transform = ShiftBlur('linear'))
             test_data = CIFAR10(path+'/test', train=False,
                                 download = True,
                                 transform = None)
-
-#             target = impage.copy()
-            
-            
-#         tsfms = transforms.Compose([
-        for t in train_data:
-            print(t)
-            break
+        if dataset_name == "SBU":
+            data = CustomSBU(path, transform = ShiftBlur('linear'), download=True)
+            # need to finish
+        dataset = BlurDataset(train_data, test_data)
+        
         return dataset
-#         dataset.train = DataEntry()
+    
         
 
 """
@@ -101,12 +113,8 @@ tsfm = Transform(params)
 transformed_sample = tsfm(sample)
 """
 
-class ChangeTarget(object):
-    def __call__(self, sample):
-        print(sample)
-        img_tgt = sample.copy()
-        return {'blurred':img, 'target':img_tgt}
-        
+
+######## These are only for gopro dataset which has diff format #########        
 class Rescale(object):
     """Rescale the images in a sample to a given size.
 
@@ -196,19 +204,45 @@ class ToTensor(object):
 class ShiftBlur(object):
     """Blurs the image by applying a shift blur"""
     
-    def __init__(self, num_shifts=3):
-        self.num_shifts = num_shifts
+    def __init__(self, blur_kernel = 'psf'):
+        self.blur_kernel = blur_kernel
         
-    def __call__(self, sample):
+    def __call__(self, image):
         """
         Want to apply the blur to only the blurred image lol
         """
-        blurred, target = sample['blurred'], sample['target']
-        
-        ## TODO: apply the blur transform (@noah do this)
-        
-        return {'blurred': blurred,
-                'target': target}
+        image = np.asarray(image)
+        img_r = image[:,:,0]
+        img_g = image[:,:,1]
+        img_b = image[:,:,2]
+        if self.blur_kernel == 'psf': 
+            ## Point-spread function blur
+            psfid = np.random.randint(0, 99)
+            blurred_r = PsfBlur(img_r, psfid)
+            blurred_g = PsfBlur(img_g, psfid)
+            blurred_b = PsfBlur(img_b, psfid)
+            
+        elif self.blur_kernel == 'linear':
+            ## Linear Motion blur kernel
+            line_lengths = [3,5,7,9]
+            dim = line_lengths[np.random.randint(0, len(line_lengths))]
+            angle = randomAngle(dim)
+            line_type = 'full'
+            blurred_r = LinearMotionBlur(img_r, dim, angle, line_type)
+            blurred_g = LinearMotionBlur(img_g, dim, angle, line_type)
+            blurred_b = LinearMotionBlur(img_b, dim, angle, line_type)
+        else:
+            blurred_r = img_r
+            blurred_g = img_g
+            blurred_b = img_b
+            
+        blurred_image = np.zeros_like(image)
+        blurred_image[:,:,0] = blurred_r
+        blurred_image[:,:,1] = blurred_g
+        blurred_image[:,:,2] = blurred_b
+        blurred_image = Image.fromarray(blurred_image)
+            
+        return blurred_image
 
 
     
