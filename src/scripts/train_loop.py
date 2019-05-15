@@ -5,7 +5,9 @@ TODO:
         -Do we need two loss functions?
     -Define loader_train function for our imagenet data
 '''
-
+import sys
+sys.path.append('../')
+from dataprocessing.dataloader import *
 
 params = {'num_epochs':10}
 Tensor = torch.cuda.FloatTensor
@@ -14,11 +16,12 @@ Tensor = torch.cuda.FloatTensor
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
 
-def train_loop(generator, discriminator, params):
+
+def train_loop(generator, discriminator, dataloader, params):
     for epoch in range(num_epochs):
         
         #Loop through batch
-        for i, (imgs, something) in enumerate(dataloader):
+        for i, (imgs, something) in enumerate(dataloader.train):
             
             #Apply filter to imgs
             
