@@ -10,8 +10,9 @@ import torch
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageNet
+# from torchvision.datasets import ImageNet
 from torchvision.datasets import CIFAR10
+from pyblur.pyblur.PsfBlur import PsfBlur_random
 
 from torchvision.utils import save_image
 from torch.autograd import Variable
@@ -59,7 +60,10 @@ if cuda:
 
 def train_loop():
     path='~/cs231n-proj/data/cifar'
-    data = CIFAR10(path, train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
+    data = CIFAR10(path, train=True, download=True, 
+                   transform=transforms.Compose([
+                       transforms.Lambda(lambda img: PsfBlur_random(img)),
+                       transforms.ToTensor()]))
     dataloader = DataLoader(data, batch_size=5, shuffle=True)
     
     num_epochs = 5
@@ -131,39 +135,7 @@ def train_loop():
             
             
             
-          # def train_me(model_fn, params, lr, device=torch.device('cuda')):
-#     #Load data
-#     loader_train = DataLoader(imagenet_batch, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
-    
-#     for t, (x, y) in enumerate(loader_train):
-#         # Move the data to the proper device (GPU or CPU)
-#         x = x.to(device=device, dtype=torch.float32)
-#         y = y.to(device=device, dtype=torch.long)
-
-#         # Forward pass: compute scores and loss
-#         scores = model_fn(x, params)
-#         loss = F.cross_entropy(scores, y)     
-
-#         # Backward pass: PyTorch figures out which Tensors in the computational
-#         # graph has requires_grad=True and uses backpropagation to compute the
-#         # gradient of the loss with respect to these Tensors, and stores the
-#         # gradients in the .grad attribute of each Tensor.
-#         loss.backward()
-
-#         # Update parameters. We don't want to backpropagate through the
-#         # parameter updates, so we scope the updates under a torch.no_grad()
-#         # context manager to prevent a computational graph from being built.
-#         with torch.no_grad():
-#             for w in params:
-#                 w -= learning_rate * w.grad
-
-#                 # Manually zero the gradients after running the backward pass
-#                 w.grad.zero_()
-
-#         if t % print_every == 0:
-#             print('Iteration %d, loss = %.4f' % (t, loss.item()))
-#             check_accuracy_part2(loader_val, model_fn, params)
-#             print()
+ 
   
             
             
