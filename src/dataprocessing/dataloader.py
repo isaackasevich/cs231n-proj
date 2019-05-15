@@ -8,9 +8,8 @@ from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
-
-import warnings
-warnings.filterwarnings('ignore')
+from torchvision.datasets import CIFAR10
+from PIL import Image
 
 class DataEntry(Dataset):
     def __init__(self, dataset, tsfms = None):
@@ -37,8 +36,19 @@ class DataEntry(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def __getitem__(self, idx):
-        pass
+class CustomCIFAR(CIFAR10):
+    def __getitem__(self, index):
+        img = self.data[index]
+        img = Image.fromarray(img)
+        tgt = img.copy()
+        
+        if self.transform is not None:
+            img = self.transform(img)
+        
+        if self.target_transform is not None:
+            tgt = self.target_transform(tgt)
+        
+        return img, tgt
         
     
 class BlurDataset(object):
@@ -57,10 +67,25 @@ class BlurDataset(object):
         return dataset
         
     @staticmethod
-    def from_single_dataset(params):
+    def from_single_dataset(path, dataset_name = 'CIFAR'):
         dataset = BlurDataset()
-        data = 
-        dataset.train = DataEntry()
+        if dataset_name == "CIFAR":
+            train_data = CustomCIFAR(path+'/train', train=True, 
+                                 download = True,
+                                 transform = None)
+            test_data = CIFAR10(path+'/test', train=False,
+                                download = True,
+                                transform = None)
+
+#             target = impage.copy()
+            
+            
+#         tsfms = transforms.Compose([
+        for t in train_data:
+            print(t)
+            break
+        return dataset
+#         dataset.train = DataEntry()
         
 
 """
@@ -75,6 +100,13 @@ __init__ method. We can then use a transform like this:
 tsfm = Transform(params)
 transformed_sample = tsfm(sample)
 """
+
+class ChangeTarget(object):
+    def __call__(self, sample):
+        print(sample)
+        img_tgt = sample.copy()
+        return {'blurred':img, 'target':img_tgt}
+        
 class Rescale(object):
     """Rescale the images in a sample to a given size.
 
@@ -177,8 +209,6 @@ class ShiftBlur(object):
         
         return {'blurred': blurred,
                 'target': target}
-# from torchvision.datasets import ImageNet
-# from torchvision.datasets import CIFAR
 
 
     

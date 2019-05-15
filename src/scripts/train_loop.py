@@ -5,20 +5,21 @@ TODO:
         -Do we need two loss functions?
     -Define loader_train function for our imagenet data
 '''
-
+import os, sys
 import torch
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageNet
-from torchvision.datasets import CIFAR10
 
 from torchvision.utils import save_image
 from torch.autograd import Variable
 
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+
+sys.path.append('../dataprocessing')
+from dataloader import BlurDataset
+ 
 
 # parser = argparse.ArgumentParser()
 # parser.add_argument("--n_epochs", type=int, default=5, help="number of epochs of training")
@@ -59,8 +60,9 @@ if cuda:
 
 def train_loop():
     path='~/cs231n-proj/data/cifar'
-    data = CIFAR10(path, train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
-    dataloader = DataLoader(data, batch_size=5, shuffle=True)
+    dataset = BlurDataset.from_single_dataset(path, 'CIFAR')
+#     data = CIFAR10(path, train=True, download=True, transform=transforms.Compose([transforms.ToTensor()]))
+#     dataloader = DataLoader(data, batch_size=5, shuffle=True)
     
     num_epochs = 5
     
