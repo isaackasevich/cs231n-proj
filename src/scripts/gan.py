@@ -4,7 +4,7 @@ Classes borrowed from https://github.com/eriklindernoren/PyTorch-GAN/blob/master
 '''
 
 # import os
-# import numpy as np
+import numpy as np
 # import math
 
 # import torchvision.transforms as transforms
@@ -17,6 +17,8 @@ Classes borrowed from https://github.com/eriklindernoren/PyTorch-GAN/blob/master
 import torch.nn as nn
 import torch.nn.functional as F
 import torch
+
+img_shape = (3, 32, 32)
 
 class Generator(nn.Module):
     def __init__(self):

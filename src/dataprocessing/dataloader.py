@@ -30,7 +30,7 @@ class DataEntry(Dataset):
         @param batch_size: batch size to use
         @param shuffle: whether or not to shuffle the dataset
         """
-        loader = DataLoader(self.data, 
+        loader = DataLoader(self.dataset, 
                             batch_size=batch_size, 
                             shuffle=shuffle)
         return loader
@@ -94,7 +94,10 @@ class BlurDataset(object):
         if dataset_name == "SBU":
             data = CustomSBU(path, transform = ShiftBlur('linear'), download=True)
             # need to finish
+        train_data = DataEntry(train_data)
+        test_data = DataEntry(test_data)
         dataset = BlurDataset(train_data, test_data)
+        print("from single dataset")
         
         return dataset
     
@@ -241,6 +244,9 @@ class ShiftBlur(object):
         blurred_image[:,:,1] = blurred_g
         blurred_image[:,:,2] = blurred_b
         blurred_image = Image.fromarray(blurred_image)
+        
+        #Trying to get image into tensor format
+        blurred_image = transforms.functional.to_tensor(blurred_image)
             
         return blurred_image
 
