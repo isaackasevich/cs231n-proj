@@ -124,7 +124,7 @@ TODO:
         -Assuming we blur randomly
 '''
 
-def train_model(save=False):
+def train_model(model, save=False):
 
     for epoch in range(num_epochs):
 
@@ -152,9 +152,10 @@ def train_model(save=False):
 
             batches_done = epoch * len(dataloader) + i
             if batches_done % sample_interval == 0:
-                save_image(gen_imgs.data[:25], "../../outputs/out%d.png" % batches_done, nrow=5)
-                save_image(tgts.data[:25], "../../outputs/in.png", nrow=5)
-                if save: torch.save(model, "model_state.pt")
+                save_image(gen_imgs.data[:25], "../../outputs/out_run2_%d.png" % batches_done, nrow=5)
+                save_image(imgs.data[:25], "../../outputs/input_%d.png" % batches_done, nrow=5)
+                save_image(imgs.data[:25], "../../outputs/target_%d.png" % batches_done, nrow=5)
+                if save: torch.save(model, "model_state_2.pt")
     
             
             
