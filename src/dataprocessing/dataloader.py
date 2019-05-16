@@ -45,11 +45,14 @@ class CustomCIFAR(CIFAR10):
         img = Image.fromarray(img)
         tgt = img.copy()
         
+        if self.target_transform is not None:
+            img = self.target_transform(img)
+            
+        #This transform must be deterministic
         if self.transform is not None:
             img = self.transform(img)
-        
-        if self.target_transform is not None:
-            tgt = self.target_transform(tgt)
+            tgt = self.transform(tgt)
+
         
         return img, tgt
         
@@ -86,18 +89,19 @@ class BlurDataset(object):
     def from_single_dataset(path, dataset_name = 'CIFAR'):
         if dataset_name == "CIFAR":
             train_data = CustomCIFAR(path+'/train', train=True, 
-                                 download = True,
-                                 transform = ShiftBlur('linear'))
+                                 download = True, 
+                                 transform = transforms.ToTensor(),
+                                 target_transform = ShiftBlur('linear'))
             test_data = CIFAR10(path+'/test', train=False,
                                 download = True,
-                                transform = None)
+                                transform = transforms.ToTensor(),
+                                target_transform = None)
         if dataset_name == "SBU":
             data = CustomSBU(path, transform = ShiftBlur('linear'), download=True)
             # need to finish
         train_data = DataEntry(train_data)
         test_data = DataEntry(test_data)
         dataset = BlurDataset(train_data, test_data)
-        print("from single dataset")
         
         return dataset
     
@@ -245,9 +249,6 @@ class ShiftBlur(object):
         blurred_image[:,:,2] = blurred_b
         blurred_image = Image.fromarray(blurred_image)
         
-        #Trying to get image into tensor format
-        blurred_image = transforms.functional.to_tensor(blurred_image)
-            
         return blurred_image
 
 
