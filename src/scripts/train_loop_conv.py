@@ -53,7 +53,8 @@ img_shape = (channels, size, size)
 lr = 1e-3
 b1 = .5
 b2 = .999
-sample_interval = 50
+sample_interval = 10
+save_interval = 5
 
 cuda = True if torch.cuda.is_available() else False
 print(cuda)
@@ -152,10 +153,10 @@ def train_model(model, save=False):
 
             batches_done = epoch * len(dataloader) + i
             if batches_done % sample_interval == 0:
-                save_image(gen_imgs.data[:25], "../../outputs/out_run2_%d.png" % batches_done, nrow=5)
-                save_image(imgs.data[:25], "../../outputs/input_%d.png" % batches_done, nrow=5)
-                save_image(imgs.data[:25], "../../outputs/target_%d.png" % batches_done, nrow=5)
-                if save: torch.save(model, "model_state_2.pt")
+                save_image(gen_imgs.data[:1], "../../outputs/cleaner_conv_out/output_%d.png" % batches_done, nrow=1)
+                save_image(imgs.data[:1], "../../outputs/cleaner_conv_out/input_%d.png" % batches_done, nrow=1)
+                save_image(tgts.data[:1], "../../outputs/cleaner_conv_out/target_%d.png" % batches_done, nrow=1)
+            if save and batches_done % save_interval == 0: torch.save(model, "model_state_2.pt")
     
             
             
