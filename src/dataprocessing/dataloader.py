@@ -1,5 +1,6 @@
 ## data-loader
 ## functions that fetch dataset from internet for use in model training
+import sys, os
 
 import torch
 import torchvision
@@ -9,69 +10,71 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy
 from torch.utils.data import Dataset, DataLoader
-from torchvision.datasets import CIFAR10, SBU
+from torchvision.datasets import CIFAR10, CocoDetection
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
+
 from pyblur.pyblur.LinearMotionBlur import LinearMotionBlur, randomAngle
+
 from pyblur.pyblur.PsfBlur import PsfBlur
 from PIL import Image
 import random
 from IPython.display import display
 
-class DataEntry(Dataset):
-    def __init__(self, dataset, tsfms = None):
-        ## todo: figure out how to get data in the right format
-        self.dataset = dataset
-        self.transforms = tsfms
-    
-    def loader(self, batch_size=50, shuffle=True):
+class BlurDataset(object):
+    """
+    Generic dataset for this ML task
+    """
+    def __init__(self, data, val_split = 0.1, test_split = 0.1, shuffle=True):
+        ## create splits
+        self.data = data
+        self.train_sampler = None
+        self.val_sampler = None
+        self.test_sampler = None
+        self._create_splits(val_split, test_split, shuffle)
+        
+    def _create_splits(self, val = 0.1, test = 0.1, shuffle=True):
+        # Creating data indices for training and validation splits:
+        dataset_size = len(self.data)
+        indices = list(range(dataset_size))
+        first_split = int(np.floor(test * dataset_size))
+        second_split = int(np.floor((val+val) * dataset_size))
+        if shuffle :
+            np.random.shuffle(indices)
+            
+        test_inds = indices[:first_split]
+        val_inds = indices[first_split:second_split]
+        train_inds = indices[second_split:]
+        
+        # Creating data samplers, setting them to class variables:
+        self.train_sampler = SubsetRandomSampler(train_inds)
+        self.val_sampler = SequentialSampler(val_inds)
+        self.test_sampler = SequentialSampler(test_inds)
+   
+    def loader(self, split = 'train', batch_size=50):
         """
         call this function to create and 
         return a data loader for the specified dataset
         
+        @param train: whether to load training data or test data
         @param batch_size: batch size to use
-        @param shuffle: whether or not to shuffle the dataset
         """
+        sampler = None
+        if split == 'train':
+            sampler = self.train_sampler
+        elif split == 'val':
+            sampler = self.val_sampler
+        elif split == 'test':
+            sampler = self.test_sampler
+        
+        assert sampler is not None, "Incorrect split specified"
+        
         loader = DataLoader(self.data, 
-                            batch_size=batch_size, 
-                            shuffle=shuffle)
+                            batch_size = batch_size,
+                            sampler = sampler,
+                            shuffle = False)
         return loader
     
-    def __len__(self):
-        return len(self.data)
     
-    
-class CustomCIFAR(CIFAR10):
-    def __getitem__(self, index):
-        img = self.data[index]
-        img = Image.fromarray(img)
-        tgt = img.copy()
-        
-        if self.transform is not None:
-            img = self.transform(img)
-        
-        if self.target_transform is not None:
-            tgt = self.target_transform(tgt)
-        
-        return img, tgt
-        
-class CustomSBU(SBU):
-    def __getitem__(self, index):
-        filename = os.path.join(self.root, 'dataset', self.photos[index])
-        img = Image.open(filename).convert('RGB')
-        target = img.copy()
-        if self.transform is not None:
-            img = self.transform(img)
-            
-        if self.target_transform is not None:
-            target = self.target_transform(target)
-
-        return img, target
-        
-    
-class BlurDataset(object):
-    def __init__(self, train, test):
-        self.train = train
-        self.test = test
-        
     @staticmethod
     def gopro(path_to_root):
         tsfms = None
@@ -79,25 +82,83 @@ class BlurDataset(object):
         
         ## ToDo: load in the data files 
 #         dataset.train = DataEntry(
-        
         return dataset
         
     @staticmethod
-    def from_single_dataset(path, dataset_name = 'CIFAR'):
-        if dataset_name == "CIFAR":
-            train_data = CustomCIFAR(path+'/train', train=True, 
+    def from_single_dataset(path, 
+                            dataset_name = 'cifar', 
+                            val_split = 0.1, 
+                            test_split = 0.1):
+        if dataset_name == "cifar":
+            ## cifar 10 small dataset to test stuff
+            data = CustomCIFAR(path+'/train', train = True, 
                                  download = True,
-                                 transform = ShiftBlur('linear'))
-            test_data = CIFAR10(path+'/test', train=False,
-                                download = True,
-                                transform = None)
-        if dataset_name == "SBU":
-            data = CustomSBU(path, transform = ShiftBlur('linear'), download=True)
-            # need to finish
-        dataset = BlurDataset(train_data, test_data)
+                                 transform = transforms.ToTensor(),
+                                 target_transform = Blur('linear',
+                                                        line_lengths = [3,5]))
+            
+        elif dataset_name == "coco":
+            ## Microsoft common objects in context datset
+            data = CustomCoco(path+'/images', path+'/annotations.json', 
+                              transform = transforms.Compose([
+                                  transforms.Resize(200),
+                                  transforms.CenterCrop(200),
+                                  transforms.ToTensor()
+                              ]),
+                              target_transform = Blur('linear', 
+                                                 line_lengths = [7, 9]))
+                                                       
+        dataset = BlurDataset(data, val_split, test_split)
         
         return dataset
     
+class CustomCIFAR(CIFAR10):
+    def __getitem__(self, index):
+        img = self.data[index]
+        img = Image.fromarray(img)
+        tgt = img.copy()
+        
+        if self.target_transform is not None:
+            img = self.target_transform(img)
+        
+        ## caution! only use deterministic transforms here
+        if self.transform is not None:
+            img = self.transform(img)
+            tgt = self.transform(tgt)
+        
+        return img, tgt
+        
+class CustomCoco(CocoDetection):
+    """
+    transform: applied to both input and target
+    target_transform: wrong name (should be named blur_transform) but dont want
+        to override too much; this transform will only be applied to the ***input***
+        image (think of it as an un-blur for the target if you like)
+    
+    """
+    def __getitem__(self, index):
+        coco = self.coco
+        img_id = self.ids[index]
+        path = coco.loadImgs(img_id)[0]['file_name']
+
+        img = Image.open(os.path.join(self.root, path)).convert('RGB')
+        target = img.copy()
+        
+        if self.target_transform is not None:
+            ## apply blur (e.g. 'target_transform')
+            img = self.target_transform(img)
+         
+        ## caution! only use deterministic transforms or write your own
+        ## that take in multiple images
+        if self.transform is not None:
+            ## transform both images
+            img = self.transform(img)
+            target = self.transform(target)
+
+        return img, target
+        
+        
+
         
 
 """
@@ -201,11 +262,12 @@ class ToTensor(object):
         return {'blurred': torch.from_numpy(blurred),
                 'target': torch.from_numpy(target)}
 
-class ShiftBlur(object):
-    """Blurs the image by applying a shift blur"""
+class Blur(object):
+    """Blurs the image by applying a blur"""
     
-    def __init__(self, blur_kernel = 'psf'):
+    def __init__(self, blur_kernel = 'psf', **kwargs):
         self.blur_kernel = blur_kernel
+        self.line_lengths = kwargs.get('line_lengths', [3,5,7,9])
         
     def __call__(self, image):
         """
@@ -216,7 +278,7 @@ class ShiftBlur(object):
         img_g = image[:,:,1]
         img_b = image[:,:,2]
         if self.blur_kernel == 'psf': 
-            ## Point-spread function blur
+            ## Point-spread function blur kernel
             psfid = np.random.randint(0, 99)
             blurred_r = PsfBlur(img_r, psfid)
             blurred_g = PsfBlur(img_g, psfid)
@@ -224,14 +286,15 @@ class ShiftBlur(object):
             
         elif self.blur_kernel == 'linear':
             ## Linear Motion blur kernel
-            line_lengths = [3,5,7,9]
-            dim = line_lengths[np.random.randint(0, len(line_lengths))]
+            dim = self.line_lengths[np.random.randint(0, len(self.line_lengths))]
+           
             angle = randomAngle(dim)
             line_type = 'full'
             blurred_r = LinearMotionBlur(img_r, dim, angle, line_type)
             blurred_g = LinearMotionBlur(img_g, dim, angle, line_type)
             blurred_b = LinearMotionBlur(img_b, dim, angle, line_type)
         else:
+            ## no blur, just replace image normally
             blurred_r = img_r
             blurred_g = img_g
             blurred_b = img_b
@@ -244,6 +307,3 @@ class ShiftBlur(object):
             
         return blurred_image
 
-
-    
-    
