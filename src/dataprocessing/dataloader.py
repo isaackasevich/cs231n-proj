@@ -72,6 +72,7 @@ class BlurDataset(object):
                             batch_size = batch_size,
                             sampler = sampler,
                             shuffle = False)
+
         return loader
     
     
@@ -125,6 +126,7 @@ class CustomCIFAR(CIFAR10):
         if self.transform is not None:
             img = self.transform(img)
             tgt = self.transform(tgt)
+
         
         return img, tgt
         
@@ -304,6 +306,6 @@ class Blur(object):
         blurred_image[:,:,1] = blurred_g
         blurred_image[:,:,2] = blurred_b
         blurred_image = Image.fromarray(blurred_image)
-            
+        
         return blurred_image
 

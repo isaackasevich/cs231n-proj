@@ -6,15 +6,16 @@ TODO:
     -Define loader_train function for our imagenet data
 '''
 
+import numpy as np
+
 from gan import *
 
 import torch
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
-# from torchvision.datasets import ImageNet
 
-from torchvision.utils import save_image
+from torchvision.utils import save_image, make_grid
 from torch.autograd import Variable
 
 import sys
@@ -52,25 +53,35 @@ img_shape = (3, 32, 32)
 lr = .0002
 b1 = .5
 b2 = .999
+sample_interval = 50
 
 cuda = True if torch.cuda.is_available() else False
-
-# Loss function
-adversarial_loss = nn.BCELoss()
+if cuda: device = torch.device('cuda')
+else: device = torch.device('cpu')
 
 #Initialize generator and discriminator
-generator = Generator()
-discriminator = Discriminator()
+generator = GeneratorResNet()
+discriminator = Discriminator(input_shape=(3, 32, 32))
+feature_extractor = FeatureExtractor()
+
+# Loss function
+criterion_GAN = nn.MSELoss()
+criterion_content = nn.L1Loss()
 
 if cuda:
-    generator.cuda()
-    discriminator.cuda()
-    adversarial_loss.cuda()
+    generator = generator.cuda()
+    discriminator = discriminator.cuda()
+    feature_extractor = feature_extractor.cuda()
+    criterion_GAN = criterion_GAN.cuda()
+#     criterion_content = criterion_content.cuda()
+    
+#Load pretrained models
+# generator.load_state_dict(torch.load("saved_models/generator_%d.pth"))
+# discriminator.load_state_dict(torch.load("saved_models/discriminator_%d.pth"))
 
 # Optimizers
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr, betas=(b1, b2))
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr, betas=(b1, b2))
-
 
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
@@ -86,12 +97,7 @@ TODO:
 path='~/cs231n-proj/data/cifar'
 
 data = BlurDataset.from_single_dataset(path)
-dataloader = data.train.loader()
-# data = CIFAR10(path, train=True, download=True, 
-#                transform=transforms.Compose([
-#                    transforms.Lambda(lambda img: PsfBlur_random(img)),
-#                    transforms.ToTensor()]))
-# dataloader = DataLoader(data, batch_size=5, shuffle=True)
+dataloader = data.train.loader(batch_size=5)
 
 '''
 Train
@@ -102,52 +108,61 @@ TODO:
         -Assuming we blur randomly
 '''
 
-for epoch in range(num_epochs):
+def train_model():
 
-    #Loop through batch
-    for i, (imgs, _) in enumerate(dataloader):
+    for epoch in range(num_epochs):
 
-        #Ground Truths
-        valid = Variable(Tensor(imgs.size(0), 1).fill_(1), requires_grad=False)
-        fake = Variable(Tensor(imgs.size(0), 1).fill_(0), requires_grad=False)
+        #Loop through batch
+        for i, (imgs, tgts) in enumerate(dataloader):
 
-        #Configure Input
-        real_imgs = Variable(imgs.type(Tensor))
+            print(*discriminator.output_shape)
+            #Ground Truths
+            # Adversarial ground truths
+            valid = Variable(Tensor(np.ones((imgs.size(0), 1,8,8))), requires_grad=False)
+            fake = Variable(Tensor(np.zeros((imgs.size(0), *discriminator.output_shape))), requires_grad=False)
 
-        #Train generator
-        optimizer_G.zero_grad()
+            #Configure Input
+            imgs = Variable(imgs.type(Tensor))
+            tgts = Variable(tgts.type(Tensor)).to(device)
 
-        # Sample noise as generator input
-        # Not sure we want to do this...if we already have a random filter than we may
-        # not need random noise
-        z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], opt.latent_dim))))
+            #Train generator
+            optimizer_G.zero_grad()
 
-        # Generate a batch of images using o
-        gen_imgs = generator(z)
+            # Generate a batch of images using o
+            gen_imgs = generator(imgs)
 
-        # Loss measures generator's ability to fool the discriminator
-        g_loss = adversarial_loss(discriminator(gen_imgs), valid)
+            # Adversarial loss
+            gan_loss = criterion_GAN(discriminator(gen_imgs), valid)
+            
+            # Content loss
+            gen_features = feature_extractor(gen_imgs)
+            real_features = feature_extractor(tgts)
+#             loss_content = criterion_content(gen_features, real_features.detatch())
 
-        g_loss.backward()
-        optimizer_G.step()
+            g_loss = 1e-3 * gan_loss
+            
+            g_loss.backward()
+            optimizer_G.step()
 
-        #Train Discriminator
-        optimizer_D.zero_grad()
+            #Train Discriminator
+            optimizer_D.zero_grad()
 
-        # Measure discriminator's ability to classify real from generated samples
-        real_loss = adversarial_loss(discriminator(real_imgs), valid)
-        fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
-        d_loss = (real_loss + fake_loss) / 2
+            # Measure discriminator's ability to classify real from generated samples
+            print(tgts.shape, gen_imgs.shape, imgs.shape)
+            loss_real = criterion_GAN(discriminator(tgts), valid)
+            loss_fake = criterion_GAN(discriminator(gen_imgs), fake)
+            d_loss = (loss_real + loss_fake)/2
 
-        d_loss.backward()
-        optimizer_D.step()
+            d_loss.backward()
+            optimizer_D.step()
 
-        print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-        % (epoch, opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item()))
+            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+            % (epoch, opt.n_epochs, i, len(dataloader), d_loss_D.item(), g_loss.item()))
 
-        batches_done = epoch * len(dataloader) + i
-        if batches_done % opt.sample_interval == 0:
-            save_image(gen_imgs.data[:25], "images/%d.png" % batches_done, nrow=5, normalize=True)
+#             batches_done = epoch * len(dataloader) + i
+#             if batches_done % opt.sample_interval == 0:
+#                 save_image(gen_imgs.data[:25], "../../outputs/gan_out%d.png" % batches_done, nrow=5, normalize=True)
+#                 save_image(tgts.data[:25], "../../outputs/in.png", nrow=5)
             
             
             
