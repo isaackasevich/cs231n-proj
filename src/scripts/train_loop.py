@@ -6,108 +6,171 @@ TODO:
     -Define loader_train function for our imagenet data
 '''
 
+import numpy as np
 
-params = {'num_epochs':10}
-Tensor = torch.cuda.FloatTensor
+from gan import *
+
+import torch
+import torchvision
+from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms as transforms
+
+from torchvision.utils import save_image, make_grid
+from torch.autograd import Variable
+
+import sys
+sys.path.append('../dataprocessing')
+from dataloader import BlurDataset
+
+import torch.nn as nn
+import torch.nn.functional as F
+
+# parser = argparse.ArgumentParser()
+# parser.add_argument("--n_epochs", type=int, default=5, help="number of epochs of training")
+# parser.add_argument("--batch_size", type=int, default=64, help="size of the batches")
+# parser.add_argument("--lr", type=float, default=0.0002, help="adam: learning rate")
+# parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
+# parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
+# parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
+# parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space")
+# parser.add_argument("--img_size", type=int, default=32, help="size of each image dimension")
+# parser.add_argument("--channels", type=int, default=1, help="number of image channels")
+# parser.add_argument("--sample_interval", type=int, default=400, help="interval betwen image samples")
+# opt = parser.parse_args()
+# print(opt)
+
+'''
+Initialization 
+
+TODO: 
+    -Decide on what we want our args to be
+    -Make sure img_shape is right
+'''
+num_epochs = 5
+channels = 3
+size = 32    #May need to change for earlier tests
+img_shape = (3, 32, 32)
+lr = .0002
+b1 = .5
+b2 = .999
+sample_interval = 50
+
+cuda = True if torch.cuda.is_available() else False
+if cuda: device = torch.device('cuda')
+else: device = torch.device('cpu')
+
+#Initialize generator and discriminator
+generator = GeneratorResNet()
+discriminator = Discriminator(input_shape=(3, 32, 32))
+feature_extractor = FeatureExtractor()
+
+# Loss function
+criterion_GAN = nn.MSELoss()
+criterion_content = nn.L1Loss()
+
+if cuda:
+    generator = generator.cuda()
+    discriminator = discriminator.cuda()
+    feature_extractor = feature_extractor.cuda()
+    criterion_GAN = criterion_GAN.cuda()
+#     criterion_content = criterion_content.cuda()
+    
+#Load pretrained models
+# generator.load_state_dict(torch.load("saved_models/generator_%d.pth"))
+# discriminator.load_state_dict(torch.load("saved_models/discriminator_%d.pth"))
 
 # Optimizers
-optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
+optimizer_G = torch.optim.Adam(generator.parameters(), lr=lr, betas=(b1, b2))
+optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=lr, betas=(b1, b2))
 
-def train_loop(generator, discriminator, params):
+Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+
+'''
+Load Data 
+
+TODO:
+    -Apply a transform to incoming images
+    -Split to train and val
+    -
+'''
+    
+path='~/cs231n-proj/data/cifar'
+
+data = BlurDataset.from_single_dataset(path)
+dataloader = data.train.loader(batch_size=5)
+
+'''
+Train
+
+TODO:
+    -Experiment with model architectures and params
+    -Decide if we still want to add random noise on top of our random blur
+        -Assuming we blur randomly
+'''
+
+def train_model():
+
     for epoch in range(num_epochs):
-        
+
         #Loop through batch
-        for i, (imgs, something) in enumerate(dataloader):
-            
-            #Apply filter to imgs
-            
+        for i, (imgs, tgts) in enumerate(dataloader):
+
+            print(*discriminator.output_shape)
             #Ground Truths
-            valid = Variable(Tensor(imgs.size(0), 1).fill_(1), requires_grad=False)
-            fake = Variable(Tensor(imgs.size(0), 1).fill_(0), requires_grad=False)
-        
+            # Adversarial ground truths
+            valid = Variable(Tensor(np.ones((imgs.size(0), 1,8,8))), requires_grad=False)
+            fake = Variable(Tensor(np.zeros((imgs.size(0), *discriminator.output_shape))), requires_grad=False)
+
             #Configure Input
-            real_imgs = Variable(imgs.type(Tensor))
-        
+            imgs = Variable(imgs.type(Tensor))
+            tgts = Variable(tgts.type(Tensor)).to(device)
+
             #Train generator
             optimizer_G.zero_grad()
-        
-            # Sample noise as generator input
-            # Not sure we want to do this...is this where we apply our filter?
-            # Update: I think we do want random noise but also our filter? Or
-            # incorporate randomness into our filter
-            z = Variable(Tensor(np.random.normal(0, 1, (imgs.shape[0], opt.latent_dim))))
 
             # Generate a batch of images using o
-            gen_imgs = generator(z)
+            gen_imgs = generator(imgs)
 
-            # Loss measures generator's ability to fool the discriminator
-            g_loss = adversarial_loss(discriminator(gen_imgs), valid)
+            # Adversarial loss
+            gan_loss = criterion_GAN(discriminator(gen_imgs), valid)
+            
+            # Content loss
+            gen_features = feature_extractor(gen_imgs)
+            real_features = feature_extractor(tgts)
+#             loss_content = criterion_content(gen_features, real_features.detatch())
 
+            g_loss = 1e-3 * gan_loss
+            
             g_loss.backward()
             optimizer_G.step()
-            
-            
-            
+
             #Train Discriminator
             optimizer_D.zero_grad()
 
             # Measure discriminator's ability to classify real from generated samples
-            real_loss = adversarial_loss(discriminator(real_imgs), valid)
-            fake_loss = adversarial_loss(discriminator(gen_imgs.detach()), fake)
-            d_loss = (real_loss + fake_loss) / 2
+            print(tgts.shape, gen_imgs.shape, imgs.shape)
+            loss_real = criterion_GAN(discriminator(tgts), valid)
+            loss_fake = criterion_GAN(discriminator(gen_imgs), fake)
+            d_loss = (loss_real + loss_fake)/2
 
             d_loss.backward()
             optimizer_D.step()
-            
-             print(
-            "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
-            % (epoch, opt.n_epochs, i, len(dataloader), d_loss.item(), g_loss.item())
-            )
 
-            batches_done = epoch * len(dataloader) + i
-            if batches_done % opt.sample_interval == 0:
-                save_image(gen_imgs.data[:25], "images/%d.png" % batches_done, nrow=5, normalize=True)
-            
-            
-            
-            
-            
-            
-            
-          # def train_me(model_fn, params, lr, device=torch.device('cuda')):
-#     #Load data
-#     loader_train = DataLoader(imagenet_batch, batch_size=64, sampler=sampler.SubsetRandomSampler(range(NUM_TRAIN)))
-    
-#     for t, (x, y) in enumerate(loader_train):
-#         # Move the data to the proper device (GPU or CPU)
-#         x = x.to(device=device, dtype=torch.float32)
-#         y = y.to(device=device, dtype=torch.long)
+            print("[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f]"
+            % (epoch, opt.n_epochs, i, len(dataloader), d_loss_D.item(), g_loss.item()))
 
-#         # Forward pass: compute scores and loss
-#         scores = model_fn(x, params)
-#         loss = F.cross_entropy(scores, y)     
-
-#         # Backward pass: PyTorch figures out which Tensors in the computational
-#         # graph has requires_grad=True and uses backpropagation to compute the
-#         # gradient of the loss with respect to these Tensors, and stores the
-#         # gradients in the .grad attribute of each Tensor.
-#         loss.backward()
-
-#         # Update parameters. We don't want to backpropagate through the
-#         # parameter updates, so we scope the updates under a torch.no_grad()
-#         # context manager to prevent a computational graph from being built.
-#         with torch.no_grad():
-#             for w in params:
-#                 w -= learning_rate * w.grad
-
-#                 # Manually zero the gradients after running the backward pass
-#                 w.grad.zero_()
-
-#         if t % print_every == 0:
-#             print('Iteration %d, loss = %.4f' % (t, loss.item()))
-#             check_accuracy_part2(loader_val, model_fn, params)
-#             print()
+#             batches_done = epoch * len(dataloader) + i
+#             if batches_done % opt.sample_interval == 0:
+#                 save_image(gen_imgs.data[:25], "../../outputs/gan_out%d.png" % batches_done, nrow=5, normalize=True)
+#                 save_image(tgts.data[:25], "../../outputs/in.png", nrow=5)
+            
+            
+            
+            
+            
+            
+            
+ 
   
             
             
