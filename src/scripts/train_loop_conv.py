@@ -45,25 +45,22 @@ TODO:
     -Decide on what we want our args to be
     -Make sure img_shape is right
 '''
-num_epochs = 1
+num_epochs = 5
+batch_size = 100
 channels = 3
-size = 32    #May need to change for earlier tests
-img_shape = (3, 32, 32)
-lr = .0002
+size = 200 
+img_shape = (channels, size, size)
+lr = 1e-3
 b1 = .5
 b2 = .999
-sample_interval = 50
+sample_interval = 10
+save_interval = 5
 
 cuda = True if torch.cuda.is_available() else False
+print(cuda)
 if cuda: device = torch.device('cuda')
 else: device = torch.device('cpu')
 
-# Loss function
-adversarial_loss = nn.MSELoss()
-# adversarial_loss = nn.BCELoss()
-
-
-#Initialize FC net
 class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
@@ -73,25 +70,33 @@ class Expand(nn.Module):
         return x.view(x.size(0), img_shape[0], img_shape[1], img_shape[2])
 
 input_size = img_shape[0] * img_shape[1] * img_shape[2]
-        
-# model = nn.Sequential(
-#     Flatten(),
-#     nn.Linear(input_size, input_size),
-#     Expand(),
-# )
+   
+def fc_net():
+    model = nn.Sequential(
+        Flatten(),
+        nn.Linear(input_size, input_size),
+        Expand(),
+    )
+    return model
 
-model = nn.Sequential(
-    nn.Conv2d(3, 3, 3, padding=1),
-    nn.ReLU(),
-    nn.Conv2d(3, 3, 3, padding=1),
-    nn.ReLU(),
-    nn.Conv2d(3, 3, 3, padding=1),
-    nn.ReLU()
-)
+def conv_net():
+    model = nn.Sequential(
+        nn.Conv2d(3, 7, 5, padding=2),
+        nn.ReLU(),
+        nn.Conv2d(7, 5, 3, padding=1),
+        nn.ReLU(),
+        nn.Conv2d(5, 3, 3, padding=1),
+    )
+    return model
 
+model = conv_net()
+
+# Loss function
+loss_func = nn.MSELoss()
+    
 if cuda:
     model = model.to(device=device)
-    adversarial_loss = adversarial_loss.to(device=device)
+    loss_func = loss_func.to(device=device)
 
 # Optimizers
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(b1, b2))
@@ -107,10 +112,10 @@ TODO:
     -
 '''
     
-path='~/cs231n-proj/data/cifar'
+path='../../data/coco'
 
 data = BlurDataset.from_single_dataset(path)
-dataloader = data.train.loader(batch_size=400)
+dataloader = data.loader(batch_size=batch_size)
 '''
 Train
 
@@ -120,7 +125,7 @@ TODO:
         -Assuming we blur randomly
 '''
 
-def train_model():
+def train_model(model, save=False):
 
     for epoch in range(num_epochs):
 
@@ -134,15 +139,11 @@ def train_model():
             #Train fc
             optimizer.zero_grad()
 
-            # Sample noise as generator input
-            # Not sure we want to do this...if we already have a random filter than we may
-            # not need random noise
-
             # Generate a batch of images using fc layer
             gen_imgs = model(imgs)
 
             # Loss measures generator's ability to fool the discriminator
-            loss = adversarial_loss(gen_imgs, tgts)
+            loss = loss_func(gen_imgs, tgts)
 
             loss.backward()
             optimizer.step()
@@ -152,10 +153,11 @@ def train_model():
 
             batches_done = epoch * len(dataloader) + i
             if batches_done % sample_interval == 0:
-                save_image(gen_imgs.data[:25], "../../outputs/out%d.png" % batches_done, nrow=5)
-                save_image(tgts.data[:25], "../../outputs/in.png", nrow=5)
-            
-            
+                save_image(gen_imgs.data[:1], "../../outputs/cleaner_conv_out/output_%d.png" % batches_done, nrow=1)
+                save_image(imgs.data[:1], "../../outputs/cleaner_conv_out/input_%d.png" % batches_done, nrow=1)
+                save_image(tgts.data[:1], "../../outputs/cleaner_conv_out/target_%d.png" % batches_done, nrow=1)
+            if save and batches_done % save_interval == 0: torch.save(model, "model_state_2.pt")
+    
             
             
             

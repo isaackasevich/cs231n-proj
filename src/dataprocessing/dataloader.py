@@ -87,7 +87,7 @@ class BlurDataset(object):
         
     @staticmethod
     def from_single_dataset(path, 
-                            dataset_name = 'cifar', 
+                            dataset_name = 'coco', 
                             val_split = 0.1, 
                             test_split = 0.1):
         if dataset_name == "cifar":
@@ -100,7 +100,7 @@ class BlurDataset(object):
             
         elif dataset_name == "coco":
             ## Microsoft common objects in context datset
-            data = CustomCoco(path+'/images', path+'/annotations.json', 
+            data = CustomCoco(path +'/images', path+'/annotations.json', 
                               transform = transforms.Compose([
                                   transforms.Resize(200),
                                   transforms.CenterCrop(200),
