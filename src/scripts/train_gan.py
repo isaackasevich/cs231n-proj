@@ -89,7 +89,7 @@ class Generator(nn.Module):
         
         
 class Discriminator(nn.Module):
-    def __init__(self, img_shape, channel_1=32, channel_2=32, channel_3=16):
+    def __init__(self, img_shape, channel_1=32, channel_2=32, channel_3=16, hidden_size=200):
         super().__init__()
 
         in_channel, H, W = img_shape
@@ -99,8 +99,8 @@ class Discriminator(nn.Module):
         self.conv3 = nn.Conv2d(channel_2, channel_3, 3, padding=1)
         
         fc_in = int(channel_3 * H * W / 64)
-        self.fc1 = nn.Linear(fc_in, fc_in)
-        self.fc2 = nn.Linear(fc_in, 1)
+        self.fc1 = nn.Linear(fc_in, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, 1)
         
         self.leakyRelu = nn.LeakyReLU(.01)
         self.maxPool = nn.MaxPool2d(2, 2)
@@ -270,9 +270,9 @@ def train_batches(epoch, generator, discriminator, dataloader, train=True, save=
 
         if iteration % sample_interval == 0:
             losses.append((g_loss.item(), d_loss.item(), iteration))
-            save_image(imgs.data[:4], "../../outputs/gan/" + pathval + "%d_input.png" % iteration, nrow=2)
-            save_image(gen_imgs.data[:4], "../../outputs/gan/" + pathval + "%d_output.png" % iteration, nrow=2)
-            save_image(tgts.data[:4], "../../outputs/gan/" + pathval + "%d_target.png" % iteration, nrow=2)
+            save_image(imgs.data[:4], "../../outputs/gan/%d_" % iteration + pathval + "_input.png", nrow=2)
+            save_image(gen_imgs.data[:4], "../../outputs/gan/%d_" % iteration + pathval + "_output.png", nrow=2)
+            save_image(tgts.data[:4], "../../outputs/gan/%d_" % iteration + pathval + "_target.png", nrow=2)
         if save and (iteration % save_interval == 0): 
             torch.save(generator, "../../outputs/gan/generator.pt")
             torch.save(discriminator, "../../outputs/gan/discriminator.pt")
