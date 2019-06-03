@@ -70,7 +70,7 @@ class Generator(nn.Module):
 #         self.batchNorm4 = nn.BatchNorm2d(channel_4)
         self.conv5 = nn.Conv2d(channel_4, in_channel, 3, padding=1)
         
-        self.relu = nn.ReLU()
+        self.relu = nn.LeakyReLU()
 
         nn.init.kaiming_normal_(self.conv1.weight)
         nn.init.kaiming_normal_(self.conv2.weight)
@@ -155,9 +155,7 @@ def generator_loss(fake_scores):
     """
 
     N = fake_scores.shape
-    
     true_labels = torch.ones(N).type(dtype)
-    
     loss = bce_loss(fake_scores, true_labels)
     
     return loss

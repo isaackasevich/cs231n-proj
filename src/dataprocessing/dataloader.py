@@ -73,7 +73,8 @@ class BlurDataset(object):
         loader = DataLoader(self.data, 
                             batch_size = batch_size,
                             sampler = sampler,
-                            shuffle = False)
+                            shuffle = False,
+                            drop_last = True)
 
         return loader
     
