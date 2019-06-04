@@ -20,7 +20,7 @@ Define UNet classes
 '''
  
 class UNet(nn.Module):
-    def __init__(self, img_shape, channel_1=20, channel_2=24, channel_3=32):
+    def __init__(self, img_shape, channel_1=16, channel_2=12, channel_3=20, channel_4=12):
         super().__init__()
         
         in_channel, H, W = img_shape
@@ -30,9 +30,10 @@ class UNet(nn.Module):
         self.conv3 = nn.Conv2d(channel_2, channel_3, 3, padding=1)
         
         self.unconv1 = nn.ConvTranspose2d(channel_3, channel_2, 4, stride=2, padding=1)
-        self.unconv2 = nn.ConvTranspose2d(channel_2, channel_1, 4, stride=2, padding=1)
+        self.unconv2 = nn.ConvTranspose2d(2*channel_2, channel_1, 4, stride=2, padding=1)
         
-        self.out_conv = nn.Conv2d(channel_1, 3, 3, padding=1)
+        self.conv4 = nn.Conv2d(2*channel_1, channel_4, 3, padding=1)
+        self.out_conv = nn.Conv2d(channel_4, 3, 3, padding=1)
         
         self.maxpool = nn.MaxPool2d(2,2)
         self.relu = nn.ReLU()
@@ -40,6 +41,8 @@ class UNet(nn.Module):
         nn.init.kaiming_normal_(self.conv1.weight)
         nn.init.kaiming_normal_(self.conv2.weight)
         nn.init.kaiming_normal_(self.conv3.weight)
+        nn.init.kaiming_normal_(self.conv4.weight)
+        nn.init.kaiming_normal_(self.out_conv.weight)
         nn.init.kaiming_normal_(self.unconv1.weight)
         nn.init.kaiming_normal_(self.unconv2.weight)
         
@@ -49,9 +52,15 @@ class UNet(nn.Module):
         o2 = self.relu(self.conv2(m1))
         m2 = self.maxpool(o2)
         o3 = self.relu(self.conv3(m2))
-        o4 = self.relu(self.unconv1(o3)) + o2
-        o5 = self.relu(self.unconv2(o4)) + o1
-        out_img = self.relu(self.out_conv(o5))
+        
+        t4 = self.relu(self.unconv1(o3))
+        o4 = torch.cat((t4, o2), dim=1)
+        
+        t5 = self.relu(self.unconv2(o4))
+        o5 = torch.cat((t5, o1), dim=1)
+        
+        o6 = self.relu(self.conv4(o5))
+        out_img = self.relu(self.out_conv(o6))
         
         return out_img
         
@@ -61,7 +70,7 @@ Initialization
 num_epochs = 1
 batch_size = 100
 channels = 3
-size = 200 
+size = 64 
 img_shape = (channels, size, size)
 lr = 2e-4
 b1 = .5
@@ -100,7 +109,7 @@ TODO:
     -Experiment with params
 '''
 def save_losses(losses, path):
-    with open(path, 'w') as f:
+    with open(path, 'a+') as f:
         for item in losses:
             f.write("{}\n".format(item))
 
@@ -133,8 +142,9 @@ def train_batches(epoch, unet, dataloader, it=0, train=True, save=True):
         % (epoch, num_epochs, i, len(dataloader), iteration, loss))
 
         if iteration % sample_interval == 0:
-            losses.append((loss.item(), iteration))
-            save_losses(losses, "../../outputs/unet/" + pathval + "_losses.txt")
+            cur_loss = [(iteration, loss.item())]
+            losses += cur_loss
+            save_losses(cur_loss, "../../outputs/unet/" + pathval + "_losses.txt")
             save_image(imgs.data[:4], "../../outputs/unet/%d_" % iteration + pathval + "_input.png", nrow=2)
             save_image(gen_imgs.data[:4], "../../outputs/unet/%d_" % iteration + pathval + "_output.png", nrow=2)
             save_image(tgts.data[:4], "../../outputs/unet/%d_" % iteration + pathval + "_target.png", nrow=2)
@@ -143,13 +153,11 @@ def train_batches(epoch, unet, dataloader, it=0, train=True, save=True):
 
 def train_model(unet, save=True, it=0):
     
-    train_losses = []
-    val_losses = []
     for epoch in range(num_epochs):
-        train_losses += train_batches(epoch, unet, train_dataloader, it)
+        train_batches(epoch, unet, train_dataloader, it)
 
         if epoch % validation_rate == 0:
-            val_losses += train_batches(epoch, unet, val_dataloader, it, train=False, save=False)
+            train_batches(epoch, unet, val_dataloader, it, train=False, save=False)
             
             
             
