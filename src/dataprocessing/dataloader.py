@@ -91,6 +91,7 @@ class BlurDataset(object):
                             dataset_name = 'coco', 
                             val_split = 0.025, 
                             test_split = 0.025):
+        
         if dataset_name == "cifar":
             ## cifar 10 small dataset to test stuff
             data = CustomCIFAR(path+'/train', train = True, 
