@@ -33,7 +33,6 @@ class BlurDataset(object):
         self.test_sampler = None
         self._create_splits(val_split, test_split, shuffle)
         
-
     def _create_splits(self, val = 0.025, test = 0.025, shuffle=True):
         # Creating data indices for training and validation splits:
         dataset_size = len(self.data)
@@ -78,6 +77,10 @@ class BlurDataset(object):
 
         return loader
     
+    def random_loader(self, split='train', batch_size=50):
+        loader = DataLoader(self.data, batch_size=batch_size, shuffle = True)
+        return loader
+    
     
     @staticmethod
     def gopro(path_to_root):
@@ -91,9 +94,9 @@ class BlurDataset(object):
     @staticmethod
     def from_single_dataset(path, 
                             dataset_name = 'coco', 
-
                             val_split = 0.025, 
                             test_split = 0.025):
+
         if dataset_name == "cifar":
             ## cifar 10 small dataset to test stuff
             data = CustomCIFAR(path+'/train', train = True, 
@@ -112,6 +115,7 @@ class BlurDataset(object):
                               ]),
                               target_transform = Blur('linear', 
                                                  line_lengths = [9]))
+
         dataset = BlurDataset(data, val_split, test_split)
         
         return dataset
