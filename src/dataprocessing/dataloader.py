@@ -77,11 +77,6 @@ class BlurDataset(object):
 
         return loader
     
-    def random_loader(self, split='train', batch_size=50):
-        loader = DataLoader(self.data, batch_size=batch_size, shuffle = True)
-        return loader
-    
-    
     @staticmethod
     def gopro(path_to_root):
         tsfms = None
