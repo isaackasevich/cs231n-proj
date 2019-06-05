@@ -1,9 +1,11 @@
 import numpy as np
 import torch
 import torchvision
+from torchvision.models import vgg19
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+
 
 class Flatten(nn.Module):
     """
@@ -12,6 +14,15 @@ class Flatten(nn.Module):
     def forward(self, x):
         N, C, H, W = x.shape
         return x.view(N, -1)  
+    
+class FeatureExtractor(nn.Module):
+    def __init__(self):
+        super(FeatureExtractor, self).__init__()
+        vgg19_model = vgg19(pretrained=True)
+        self.feature_extractor = nn.Sequential(*list(vgg19_model.features.children())[:5])
+
+    def forward(self, img):
+        return self.feature_extractor(img)
     
 class Unflatten(nn.Module):
     """
@@ -65,12 +76,13 @@ class ResBlock(nn.Module):
 class WGANGenerator(nn.Module):
     def __init__(self, img_shape, noise_dim=100):
         super(WGANGenerator, self).__init__()
+        
         in_channel, H, W = img_shape
         
-        self.noise_proj = nn.Linear(in_features=noise_dim, 
-                                  out_features=in_channel*H*W)
-        initialize_weights(self.noise_proj)
-        
+#         self.noise_proj = nn.Linear(in_features=noise_dim, 
+#                                   out_features=in_channel*H*W)
+#         initialize_weights(self.noise_proj)
+        print('nonoise-init')
         self.leaky = nn.LeakyReLU()
         self.unflat = Unflatten(-1, in_channel, H, W)
         self.conv1 = nn.Conv2d(in_channel, 128, kernel_size=5, padding=2)
@@ -79,10 +91,11 @@ class WGANGenerator(nn.Module):
         self.conv2 = nn.Conv2d(128, 3, kernel_size=3, padding=1)
         
     def forward(self, x_img, x_noise):
-        noise = F.relu(self.noise_proj(x_noise))
-        unflat_noise = self.unflat(noise)
+#         noise = F.relu(self.noise_proj(x_noise))
+#         unflat_noise = self.unflat(noise)
         
-        img_noise = x_img + unflat_noise
+#         img_noise = x_img + unflat_noise
+        img_noise = x_img
         out1 = self.leaky(self.conv1(img_noise))
         out2 = self.leaky(self.res1(out1))
         out3 = self.leaky(self.res2(out2))
@@ -125,11 +138,16 @@ class WGANDiscriminator(nn.Module):
 
         return scores
     
-def generator_loss(fake_scores):
+def generator_loss(gen_imgs, tgts, D, feature_extractor, adversarial_weight=0.01):
     """
     Wasserstein gan loss function for generator
     """
-    return -torch.mean(fake_scores)
+    fake_scores = D(gen_imgs)
+    gen_feats = feature_extractor(gen_imgs)
+    tgt_feats = feature_extractor(tgts)
+    adversarial_loss = -torch.mean(fake_scores)
+    content_loss = F.mse_loss(gen_feats, tgt_feats)
+    return -torch.mean(fake_scores)*adversarial_weight + content_loss
 
 def discriminator_loss(real_scores, fake_scores):
     """
