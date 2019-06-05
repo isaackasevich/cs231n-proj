@@ -1,4 +1,3 @@
 # cs231n-proj
-final proj for cs231n
 
-We used a GAN to do image stuff hopefully
+We explore a variety of model architectures for the task of blind image deblurring. Best results were found using a WGAN model with both adversarial and content loss incorporated in the loss function. Other models explored include CNN, UNet, and GAN.
