@@ -24,7 +24,8 @@ class BlurDataset(object):
     """
     Generic dataset for this ML task
     """
-    def __init__(self, data, val_split = 0.1, test_split = 0.1, shuffle=True):
+
+    def __init__(self, data, val_split = 0.025, test_split = 0.025, shuffle=True):
         ## create splits
         self.data = data
         self.train_sampler = None
@@ -32,7 +33,8 @@ class BlurDataset(object):
         self.test_sampler = None
         self._create_splits(val_split, test_split, shuffle)
         
-    def _create_splits(self, val = 0.1, test = 0.1, shuffle=True):
+
+    def _create_splits(self, val = 0.025, test = 0.025, shuffle=True):
         # Creating data indices for training and validation splits:
         dataset_size = len(self.data)
         indices = list(range(dataset_size))
@@ -71,7 +73,8 @@ class BlurDataset(object):
         loader = DataLoader(self.data, 
                             batch_size = batch_size,
                             sampler = sampler,
-                            shuffle = False)
+                            shuffle = False,
+                            drop_last = True)
 
         return loader
     
@@ -88,8 +91,9 @@ class BlurDataset(object):
     @staticmethod
     def from_single_dataset(path, 
                             dataset_name = 'coco', 
-                            val_split = 0.1, 
-                            test_split = 0.1):
+
+                            val_split = 0.025, 
+                            test_split = 0.025):
         if dataset_name == "cifar":
             ## cifar 10 small dataset to test stuff
             data = CustomCIFAR(path+'/train', train = True, 
@@ -107,8 +111,7 @@ class BlurDataset(object):
                                   transforms.ToTensor()
                               ]),
                               target_transform = Blur('linear', 
-                                                 line_lengths = [7, 9]))
-                                                       
+                                                 line_lengths = [9]))
         dataset = BlurDataset(data, val_split, test_split)
         
         return dataset
