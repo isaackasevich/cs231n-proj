@@ -12,6 +12,7 @@ from torch.autograd import Variable
 
 import sys
 sys.path.append('../dataprocessing')
+sys.path.append('../models')
 from dataloader import BlurDataset
 
 import torch.nn as nn
@@ -38,10 +39,12 @@ def plot_losses(path, title, save_path):
 def generate_imgs(model_path, save_path, split='val'):
     
     data = BlurDataset.from_single_dataset('../../data/coco')
-    dataloader = data.random_loader(split=split, batch_size=1)
+    dataloader = data.loader(split=split, batch_size=25)
                   
     model = torch.load(model_path)
     model.eval()
+    
+    losses = []
     
     for i, (imgs, tgts) in enumerate(dataloader):
 
@@ -50,12 +53,16 @@ def generate_imgs(model_path, save_path, split='val'):
         tgts = tgts.type(dtype)
 
         gen_imgs = model(imgs)
-
-        save_image(imgs.data[:1], save_path +"_input.png", nrow=1)
-        save_image(gen_imgs.data[:1], save_path +"_output.png", nrow=1)
-        save_image(tgts.data[:1], save_path +"_target.png", nrow=1)
         
-        break
+        loss = F.mse_loss(gen_imgs, tgts).item()
+        print(loss)
+        losses.append(loss)
+        
+#         save_image(imgs.data[:1], save_path +"_input.png", nrow=1)
+#         save_image(gen_imgs.data[:1], save_path +"_output.png", nrow=1)
+#         save_image(tgts.data[:1], save_path +"_target.png", nrow=1)
+        
+    print(np.mean(losses))
 
                   
                   

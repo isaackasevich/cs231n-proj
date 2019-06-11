@@ -33,7 +33,7 @@ class BlurDataset(object):
         self.test_sampler = None
         self._create_splits(val_split, test_split, shuffle)
         
-    def _create_splits(self, val = 0.025, test = 0.025, shuffle=True):
+    def _create_splits(self, val = 0.025, test = 0.025, shuffle=False):
         # Creating data indices for training and validation splits:
         dataset_size = len(self.data)
         indices = list(range(dataset_size))

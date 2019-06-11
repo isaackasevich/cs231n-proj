@@ -74,37 +74,40 @@ class ResBlock(nn.Module):
         return x + conv2_out
     
 class WGANGenerator(nn.Module):
-    def __init__(self, img_shape, noise_dim=100):
+    def __init__(self, img_shape):
         super(WGANGenerator, self).__init__()
         
         in_channel, H, W = img_shape
         
-#         self.noise_proj = nn.Linear(in_features=noise_dim, 
-#                                   out_features=in_channel*H*W)
-#         initialize_weights(self.noise_proj)
-        print('nonoise-init')
         self.leaky = nn.LeakyReLU()
         self.unflat = Unflatten(-1, in_channel, H, W)
         self.conv1 = nn.Conv2d(in_channel, 128, kernel_size=5, padding=2)
+
         self.res1 = ResBlock(128)
         self.res2 = ResBlock(128)
-        self.conv2 = nn.Conv2d(128, 3, kernel_size=3, padding=1)
+        self.res3 = ResBlock(128)
+        self.res4 = ResBlock(128)        
+
+        self.conv4 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
+        self.conv5 = nn.Conv2d(64, 3, kernel_size=3, padding=1)
         
-    def forward(self, x_img, x_noise):
-#         noise = F.relu(self.noise_proj(x_noise))
-#         unflat_noise = self.unflat(noise)
-        
-#         img_noise = x_img + unflat_noise
-        img_noise = x_img
-        out1 = self.leaky(self.conv1(img_noise))
-        out2 = self.leaky(self.res1(out1))
-        out3 = self.leaky(self.res2(out2))
-        out = self.conv2(out3)
+    def forward(self, x):
+
+        x = self.leaky(self.conv1(x))
+
+        x = self.leaky(self.res1(x))
+        x = self.leaky(self.res2(x))
+        x = self.leaky(self.res3(x))
+        x = self.leaky(self.res4(x))
+
+        x = self.leaky(self.conv4(x))
+        out = self.conv5(x)
+
         return out
         
         
 class WGANDiscriminator(nn.Module):
-    def __init__(self, img_shape, channel_1=32, channel_2=32, channel_3=16, hidden_size=50):
+    def __init__(self, img_shape, channel_1=64, channel_2=48, channel_3=32, hidden_size=100):
         super().__init__()
 
         in_channel, H, W = img_shape
@@ -112,6 +115,8 @@ class WGANDiscriminator(nn.Module):
         self.conv1 = nn.Conv2d(in_channel, channel_1, 5, padding=2)        
         self.conv2 = nn.Conv2d(channel_1, channel_2, 3, padding=1)
         self.conv3 = nn.Conv2d(channel_2, channel_3, 3, padding=1)
+        
+        self.res1 = ResBlock(channel_3)
         
         fc_in = int(channel_3 * H * W / 64)
         self.fc1 = nn.Linear(fc_in, hidden_size)
@@ -131,6 +136,8 @@ class WGANDiscriminator(nn.Module):
         x = self.maxPool(self.leakyRelu(self.conv1(x)))
         x = self.maxPool(self.leakyRelu(self.conv2(x)))
         x = self.maxPool(self.leakyRelu(self.conv3(x)))
+        
+        x = self.leakyRelu(self.res1(x))
 
         x = self.flatten(x)
         x = self.leakyRelu(self.fc1(x))
@@ -147,7 +154,7 @@ def generator_loss(gen_imgs, tgts, D, feature_extractor, adversarial_weight=0.01
     tgt_feats = feature_extractor(tgts)
     adversarial_loss = -torch.mean(fake_scores)
     content_loss = F.mse_loss(gen_feats, tgt_feats)
-    return -torch.mean(fake_scores)*adversarial_weight + content_loss
+    return -torch.mean(fake_scores)*adversarial_weight + .5 * content_loss + .5 * F.mse_loss(gen_imgs, tgts)
 
 def discriminator_loss(real_scores, fake_scores):
     """
